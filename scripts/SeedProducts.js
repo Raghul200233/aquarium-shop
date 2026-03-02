@@ -2951,7 +2951,7 @@ const users = [
   {
     name: 'Admin User',
     email: 'admin@eliteaquarium.com',
-    password: 'Admin@123',
+    password: 'Admin@123456',
     phone: '9876543210',
     address: {
       street: '123 Admin Street',
@@ -3040,7 +3040,7 @@ const seedDatabase = async () => {
     console.log(`Users added: ${insertedUsers.length}`);
     
     console.log('\n👤 User Credentials:');
-    console.log('Admin - admin@eliteaquarium / Admin@123');
+    console.log('Admin - admin@eliteaquarium / Admin@123456');
     console.log('User - john@example.com / password123');
     
     console.log('\n📦 Products by Category:');

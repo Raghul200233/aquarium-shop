@@ -21,7 +21,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin:"https://aquarium-shop-otdq.onrender.com",
+  origin:'https://aquarium-shop-frontend.vercel.app',
   credentials: true
 }));
 
