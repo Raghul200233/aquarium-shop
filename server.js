@@ -19,14 +19,25 @@ const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
 
-// Middleware
+// ✅ CORS - MUST BE THE VERY FIRST MIDDLEWARE
 app.use(cors({
-  origin:'https://aquarium-shop-frontend.vercel.app',
-  credentials: true
+  origin: ['https://aquarium-shop-frontend.vercel.app', 'http://localhost:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// ✅ Handle preflight requests explicitly
+app.options('*', cors());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// ✅ Logging middleware to verify CORS is working
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'same origin'}`);
+  next();
+});
 
 // Validate MongoDB URI
 if (!process.env.MONGODB_URI) {
