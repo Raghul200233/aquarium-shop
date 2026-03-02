@@ -19,23 +19,22 @@ const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
 
-// ✅ CORS - MUST BE THE VERY FIRST MIDDLEWARE
-app.use(cors({
-  origin: ['https://aquarium-shop-frontend.vercel.app', 'http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+// ✅ SIMPLIFIED CORS - Allow all origins (for testing)
+app.use(cors());
 
-// ✅ Handle preflight requests explicitly
-app.options('*', cors());
+// ✅ If you want to restrict to your frontend only, use this instead:
+// app.use(cors({
+//   origin: 'https://aquarium-shop-frontend.vercel.app',
+//   credentials: true
+// }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// ✅ Logging middleware to verify CORS is working
+// ✅ Log all requests for debugging
 app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - Origin: ${req.headers.origin || 'same origin'}`);
+  console.log(`📡 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'no origin'}`);
+  console.log('CORS Headers being sent:', res.getHeaders()['access-control-allow-origin']);
   next();
 });
 
@@ -46,15 +45,12 @@ if (!process.env.MONGODB_URI) {
 }
 
 // Database connection
-// After mongoose.connect
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
 })
 .then(() => {
   console.log('✅ MongoDB Connected Successfully');
-  
-  // Ensure admin user exists (runs ONCE at server start)
   const ensureAdminExists = require('./src/middleware/adminSetup');
   ensureAdminExists();
 })
@@ -95,4 +91,4 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-})
+});
