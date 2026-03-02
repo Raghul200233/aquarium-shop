@@ -21,9 +21,7 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || 'https://yourdomain.com' 
-    : 'http://localhost:3000',
+  origin:"https://aquarium-shop-otdq.onrender.com",
   credentials: true
 }));
 
