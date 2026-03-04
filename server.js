@@ -19,14 +19,21 @@ const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
 
-// ✅ SIMPLIFIED CORS - Allow all origins (for testing)
-app.use(cors());
+// ✅ CORS configuration for your live domain
+app.use(cors({
+  origin: [
+    'https://eliteaquariumandpetstore.com',
+    'https://www.eliteaquariumandpetstore.com',
+    'https://aquarium-shop-frontend.vercel.app',
+    'http://localhost:3000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
-// ✅ If you want to restrict to your frontend only, use this instead:
-// app.use(cors({
-//   origin: 'https://aquarium-shop-frontend.vercel.app',
-//   credentials: true
-// }));
+// ✅ Handle preflight requests
+app.options('*', cors());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
