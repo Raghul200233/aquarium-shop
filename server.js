@@ -19,12 +19,13 @@ const errorHandler = require('./src/middleware/errorHandler');
 
 const app = express();
 
-// ✅ CORS configuration for your live domain
+// ✅ CORS - MUST BE ABSOLUTELY FIRST
 app.use(cors({
   origin: [
     'https://eliteaquariumandpetstore.com',
     'https://www.eliteaquariumandpetstore.com',
     'https://aquarium-shop-frontend.vercel.app',
+    'https://aquarium-shop-frontend-raghul200233s-projects.vercel.app',
     'http://localhost:3000'
   ],
   credentials: true,
@@ -32,18 +33,21 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// ✅ Handle preflight requests
+// ✅ Handle preflight requests for all routes
 app.options('*', cors());
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // ✅ Log all requests for debugging
 app.use((req, res, next) => {
   console.log(`📡 ${req.method} ${req.path} - Origin: ${req.headers.origin || 'no origin'}`);
-  console.log('CORS Headers being sent:', res.getHeaders()['access-control-allow-origin']);
+  console.log('CORS Headers being sent:', {
+    'Access-Control-Allow-Origin': res.getHeader('Access-Control-Allow-Origin'),
+    'Access-Control-Allow-Credentials': res.getHeader('Access-Control-Allow-Credentials')
+  });
   next();
 });
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Validate MongoDB URI
 if (!process.env.MONGODB_URI) {
@@ -98,4 +102,11 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
+  console.log('✅ CORS configured for domains:', [
+    'https://eliteaquariumandpetstore.com',
+    'https://www.eliteaquariumandpetstore.com',
+    'https://aquarium-shop-frontend.vercel.app',
+    'https://aquarium-shop-frontend-raghul200233s-projects.vercel.app',
+    'http://localhost:3000'
+  ]);
 });
