@@ -1,6 +1,6 @@
+const Order = require('../models/Order');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
-const Order = require('../models/Order'); // You'll need this model
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -9,18 +9,60 @@ const razorpay = new Razorpay({
 });
 
 // @desc    Create a new order
-// @route   POST /api/orders/create-order
+// @route   POST /api/orders
 // @access  Private
 exports.createOrder = async (req, res, next) => {
+  try {
+    const {
+      items,
+      shippingAddress,
+      paymentMethod,
+      notes,
+      subtotal,
+      totalAmount
+    } = req.body;
+
+    // Calculate shipping (free over ₹999)
+    const shipping = subtotal > 999 ? 0 : 99;
+
+    const order = await Order.create({
+      user: req.user.id,
+      items,
+      shippingAddress,
+      paymentMethod,
+      notes,
+      subtotal,
+      shipping,
+      totalAmount,
+      status: paymentMethod === 'COD' ? 'pending' : 'processing'
+    });
+
+    // Populate product details
+    await order.populate('items.product', 'name price images');
+
+    res.status(201).json({
+      success: true,
+      order
+    });
+  } catch (error) {
+    console.error('Error creating order:', error);
+    next(error);
+  }
+};
+
+// @desc    Create Razorpay order
+// @route   POST /api/orders/create-order
+// @access  Private
+exports.createRazorpayOrder = async (req, res, next) => {
   try {
     const { amount, currency = 'INR', receipt } = req.body;
 
     const options = {
-      amount: amount * 100, // Razorpay expects amount in paise
+      amount: amount * 100,
       currency,
       receipt: receipt || `receipt_${Date.now()}`,
       notes: {
-        userId: req.user.id, // From auth middleware
+        userId: req.user.id,
         email: req.user.email
       }
     };
@@ -34,12 +76,12 @@ exports.createOrder = async (req, res, next) => {
       currency: order.currency
     });
   } catch (error) {
-    console.error('Error creating order:', error);
+    console.error('Error creating Razorpay order:', error);
     next(error);
   }
 };
 
-// @desc    Verify payment signature
+// @desc    Verify Razorpay payment
 // @route   POST /api/orders/verify-payment
 // @access  Private
 exports.verifyPayment = async (req, res, next) => {
@@ -59,21 +101,9 @@ exports.verifyPayment = async (req, res, next) => {
 
     // Verify signature
     if (expectedSignature === razorpay_signature) {
-      // Payment is verified - save to database
-      const order = await Order.create({
-        user: req.user.id,
-        razorpayOrderId: razorpay_order_id,
-        razorpayPaymentId: razorpay_payment_id,
-        razorpaySignature: razorpay_signature,
-        amount: req.body.amount,
-        products: req.body.products,
-        status: 'completed'
-      });
-
       res.status(200).json({
         success: true,
-        message: 'Payment verified successfully',
-        order
+        message: 'Payment verified successfully'
       });
     } else {
       res.status(400).json({
@@ -87,40 +117,48 @@ exports.verifyPayment = async (req, res, next) => {
   }
 };
 
-// @desc    Create a payment link (optional - for invoices)
-// @route   POST /api/orders/create-payment-link
+// @desc    Get user orders
+// @route   GET /api/orders
 // @access  Private
-exports.createPaymentLink = async (req, res, next) => {
+exports.getOrders = async (req, res, next) => {
   try {
-    const { amount, currency = 'INR', description, customer } = req.body;
-
-    const paymentLink = await razorpay.paymentLink.create({
-      amount: amount * 100,
-      currency,
-      accept_partial: false,
-      description,
-      customer: {
-        name: customer.name,
-        email: customer.email,
-        contact: customer.contact
-      },
-      notify: {
-        sms: true,
-        email: true
-      },
-      reminder_enable: true,
-      notes: {
-        userId: req.user.id
-      }
-    });
-
-    res.status(200).json({
+    const orders = await Order.find({ user: req.user.id })
+      .sort('-createdAt')
+      .populate('items.product', 'name price images');
+    
+    res.json({
       success: true,
-      paymentLink: paymentLink.short_url,
-      id: paymentLink.id
+      orders
     });
   } catch (error) {
-    console.error('Error creating payment link:', error);
+    console.error('Error getting orders:', error);
+    next(error);
+  }
+};
+
+// @desc    Get single order
+// @route   GET /api/orders/:id
+// @access  Private
+exports.getOrder = async (req, res, next) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.id,
+      user: req.user.id
+    }).populate('items.product', 'name price images');
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+    
+    res.json({
+      success: true,
+      order
+    });
+  } catch (error) {
+    console.error('Error getting order:', error);
     next(error);
   }
 };

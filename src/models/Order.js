@@ -6,17 +6,7 @@ const orderSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
-  razorpayOrderId: {
-    type: String,
-    required: true
-  },
-  razorpayPaymentId: {
-    type: String
-  },
-  razorpaySignature: {
-    type: String
-  },
-  products: [{
+  items: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
@@ -32,18 +22,43 @@ const orderSchema = new mongoose.Schema({
       required: true
     }
   }],
-  amount: {
+  shippingAddress: {
+    street: { type: String, required: true },
+    city: { type: String, required: true },
+    state: { type: String, required: true },
+    pincode: { type: String, required: true },
+    country: { type: String, required: true },
+    phone: { type: String, required: true }
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['COD', 'RAZORPAY'],
+    required: true
+  },
+  paymentResult: {
+    razorpayOrderId: String,
+    razorpayPaymentId: String,
+    razorpaySignature: String
+  },
+  subtotal: {
+    type: Number,
+    required: true
+  },
+  shipping: {
+    type: Number,
+    required: true,
+    default: 0
+  },
+  totalAmount: {
     type: Number,
     required: true
   },
   status: {
     type: String,
-    enum: ['pending', 'completed', 'failed', 'refunded'],
+    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
     default: 'pending'
   },
-  paymentMethod: {
-    type: String
-  },
+  notes: String,
   createdAt: {
     type: Date,
     default: Date.now
@@ -54,7 +69,6 @@ const orderSchema = new mongoose.Schema({
 
 // Indexes for faster queries
 orderSchema.index({ user: 1, createdAt: -1 });
-orderSchema.index({ razorpayOrderId: 1 });
 orderSchema.index({ status: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);
