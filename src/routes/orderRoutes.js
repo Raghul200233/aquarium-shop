@@ -2,15 +2,14 @@ const express = require('express');
 const router = express.Router();
 const {
   createOrder,
-  getMyOrders,
-  getOrder
+  verifyPayment,
+  createPaymentLink
 } = require('../controllers/orderController');
 const { protect } = require('../middleware/auth');
 
-router.use(protect); // All order routes require authentication
-
-router.post('/', createOrder);
-router.get('/my-orders', getMyOrders);
-router.get('/:id', getOrder);
+// All routes are protected (user must be logged in)
+router.post('/create-order', protect, createOrder);
+router.post('/verify-payment', protect, verifyPayment);
+router.post('/create-payment-link', protect, createPaymentLink);
 
 module.exports = router;

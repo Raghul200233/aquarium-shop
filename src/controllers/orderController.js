@@ -1,113 +1,126 @@
-const Order = require('../models/Order');
-const Product = require('../models/Product');
+const Razorpay = require('razorpay');
+const crypto = require('crypto');
+const Order = require('../models/Order'); // You'll need this model
 
-// @desc    Create new order
-// @route   POST /api/orders
+// Initialize Razorpay
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
+
+// @desc    Create a new order
+// @route   POST /api/orders/create-order
 // @access  Private
 exports.createOrder = async (req, res, next) => {
   try {
-    const { items, shippingAddress, paymentMethod } = req.body;
+    const { amount, currency = 'INR', receipt } = req.body;
 
-    // Calculate subtotal and verify stock
-    let subtotal = 0;
-    for (const item of items) {
-      const product = await Product.findById(item.product);
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: `Product ${item.product} not found`
-        });
+    const options = {
+      amount: amount * 100, // Razorpay expects amount in paise
+      currency,
+      receipt: receipt || `receipt_${Date.now()}`,
+      notes: {
+        userId: req.user.id, // From auth middleware
+        email: req.user.email
       }
+    };
 
-      if (product.stock < item.quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}`
-        });
-      }
+    const order = await razorpay.orders.create(options);
 
-      subtotal += product.price * item.quantity;
-      
-      // Update item with current product info
-      item.name = product.name;
-      item.price = product.price;
-      item.image = product.images[0]?.url;
-    }
-
-    // Create order
-    const order = await Order.create({
-      user: req.user.id,
-      items,
-      shippingAddress,
-      paymentMethod,
-      subtotal,
-      totalAmount: subtotal // Add shipping/tax logic if needed
-    });
-
-    // Update stock
-    for (const item of items) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: -item.quantity }
-      });
-    }
-
-    res.status(201).json({
+    res.status(200).json({
       success: true,
-      order
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency
     });
   } catch (error) {
+    console.error('Error creating order:', error);
     next(error);
   }
 };
 
-// @desc    Get user orders
-// @route   GET /api/orders/my-orders
+// @desc    Verify payment signature
+// @route   POST /api/orders/verify-payment
 // @access  Private
-exports.getMyOrders = async (req, res, next) => {
+exports.verifyPayment = async (req, res, next) => {
   try {
-    const orders = await Order.find({ user: req.user.id })
-      .populate('items.product', 'name price images')
-      .sort('-createdAt');
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    } = req.body;
 
-    res.status(200).json({
-      success: true,
-      count: orders.length,
-      orders
-    });
+    // Generate expected signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest('hex');
+
+    // Verify signature
+    if (expectedSignature === razorpay_signature) {
+      // Payment is verified - save to database
+      const order = await Order.create({
+        user: req.user.id,
+        razorpayOrderId: razorpay_order_id,
+        razorpayPaymentId: razorpay_payment_id,
+        razorpaySignature: razorpay_signature,
+        amount: req.body.amount,
+        products: req.body.products,
+        status: 'completed'
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Payment verified successfully',
+        order
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid signature'
+      });
+    }
   } catch (error) {
+    console.error('Error verifying payment:', error);
     next(error);
   }
 };
 
-// @desc    Get single order
-// @route   GET /api/orders/:id
+// @desc    Create a payment link (optional - for invoices)
+// @route   POST /api/orders/create-payment-link
 // @access  Private
-exports.getOrder = async (req, res, next) => {
+exports.createPaymentLink = async (req, res, next) => {
   try {
-    const order = await Order.findById(req.params.id)
-      .populate('user', 'name email phone')
-      .populate('items.product', 'name price images');
+    const { amount, currency = 'INR', description, customer } = req.body;
 
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // Check if user owns order or is admin
-    if (order.user._id.toString() !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to view this order'
-      });
-    }
+    const paymentLink = await razorpay.paymentLink.create({
+      amount: amount * 100,
+      currency,
+      accept_partial: false,
+      description,
+      customer: {
+        name: customer.name,
+        email: customer.email,
+        contact: customer.contact
+      },
+      notify: {
+        sms: true,
+        email: true
+      },
+      reminder_enable: true,
+      notes: {
+        userId: req.user.id
+      }
+    });
 
     res.status(200).json({
       success: true,
-      order
+      paymentLink: paymentLink.short_url,
+      id: paymentLink.id
     });
   } catch (error) {
+    console.error('Error creating payment link:', error);
     next(error);
   }
 };
