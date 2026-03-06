@@ -5,7 +5,7 @@ const Product = require('../models/Product');
 // @access  Public
 exports.getProducts = async (req, res, next) => {
   try {
-    const { category, search, sort, page = 1, limit = 100 } = req.query;
+    const { category, search, sort, page = 1, limit = 8 } = req.query;
 
     let query = {};
 
@@ -14,6 +14,7 @@ exports.getProducts = async (req, res, next) => {
     }
 
     if (search) {
+      // Use text index for search if available
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } }
@@ -28,12 +29,16 @@ exports.getProducts = async (req, res, next) => {
       sortOption = { [field]: order === 'desc' ? -1 : 1 };
     }
 
-    const products = await Product.find(query)
-      .sort(sortOption)
-      .limit(parseInt(limit))
-      .skip(skip);
-
-    const total = await Product.countDocuments(query);
+    // Execute count and find in parallel for better performance
+    const [products, total] = await Promise.all([
+      Product.find(query)
+        .sort(sortOption)
+        .limit(parseInt(limit))
+        .skip(skip)
+        .select('name price images stock rating category') // Only needed fields
+        .lean(), // Convert to plain JS objects - MUCH FASTER
+      Product.countDocuments(query)
+    ]);
 
     res.status(200).json({
       success: true,
@@ -44,6 +49,7 @@ exports.getProducts = async (req, res, next) => {
       products
     });
   } catch (error) {
+    console.error('Error in getProducts:', error);
     next(error);
   }
 };
@@ -53,7 +59,9 @@ exports.getProducts = async (req, res, next) => {
 // @access  Public
 exports.getProduct = async (req, res, next) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findById(req.params.id)
+      .select('-__v') // Remove version field
+      .lean();
 
     if (!product) {
       return res.status(404).json({
@@ -67,6 +75,7 @@ exports.getProduct = async (req, res, next) => {
       product
     });
   } catch (error) {
+    console.error('Error in getProduct:', error);
     next(error);
   }
 };
@@ -76,12 +85,17 @@ exports.getProduct = async (req, res, next) => {
 // @access  Public
 exports.getFeaturedProducts = async (req, res, next) => {
   try {
-    const products = await Product.find({ isFeatured: true }).limit(8);
+    const products = await Product.find({ isFeatured: true })
+      .limit(8)
+      .select('name price images stock rating category')
+      .lean();
+
     res.status(200).json({
       success: true,
       products
     });
   } catch (error) {
+    console.error('Error in getFeaturedProducts:', error);
     next(error);
   }
 };
@@ -121,13 +135,14 @@ exports.updateProduct = async (req, res, next) => {
       req.params.id,
       req.body,
       { new: true, runValidators: true }
-    );
+    ).select('-__v').lean();
 
     res.status(200).json({
       success: true,
       product
     });
   } catch (error) {
+    console.error('Error in updateProduct:', error);
     next(error);
   }
 };
@@ -153,6 +168,7 @@ exports.deleteProduct = async (req, res, next) => {
       message: 'Product deleted successfully'
     });
   } catch (error) {
+    console.error('Error in deleteProduct:', error);
     next(error);
   }
 };
